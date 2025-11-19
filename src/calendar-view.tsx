@@ -243,11 +243,11 @@ export class CalendarView extends BasesView {
             slotRange={this.getSlotRange()}
             initialDate={this.computeInitialDate()}
             currentDate={this.currentDate}
-            onCondenseLevelChange={(level) => this.updateCondenseLevel(level)}
             onDateChange={(date) => {
               this.currentDate = date;
             }}
             onToggleFullDay={() => this.toggleFullDay()}
+            allDayProperty={this.allDayProperty}
           />
         </AppContext.Provider>
       </StrictMode>,
