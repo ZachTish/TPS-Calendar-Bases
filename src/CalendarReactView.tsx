@@ -10,6 +10,7 @@ import dayGridPlugin from "@fullcalendar/daygrid";
 import interactionPlugin from "@fullcalendar/interaction";
 import timeGridPlugin from "@fullcalendar/timegrid";
 import {
+  DateSelectArg,
   EventClickArg,
   EventContentArg,
   EventDropArg,
@@ -65,6 +66,13 @@ interface CalendarReactViewProps {
   statusField?: string | null;
   priorityColorMap?: Record<string, string>;
   statusStyleMap?: Record<string, string>;
+  condenseLevel?: number;
+  showFullDay?: boolean;
+  dayCount?: number;
+  slotRange?: { min: string; max: string };
+  navStep?: number;
+  onCondenseLevelChange?: (level: number) => void;
+  onToggleFullDay?: () => void;
 }
 
 const normalizeValue = (value: unknown): string => {
@@ -122,13 +130,36 @@ export const CalendarReactView: React.FC<CalendarReactViewProps> = ({
   statusField,
   priorityColorMap = DEFAULT_PRIORITY_COLOR_MAP,
   statusStyleMap = DEFAULT_STATUS_STYLE_MAP,
+  condenseLevel,
+  showFullDay,
+  dayCount,
+  slotRange,
+  navStep,
+  onCondenseLevelChange,
+  onToggleFullDay,
 }) => {
   const app = useApp();
   const calendarRef = useRef<FullCalendar>(null);
   const sliderValueRef = useRef<HTMLSpanElement | null>(null);
-  const [condenseLevel, setCondenseLevel] = useState(DEFAULT_CONDENSE_LEVEL);
-  const [viewMode, setViewMode] = useState<ViewMode>("5d");
-  const [showFullDay, setShowFullDay] = useState(true);
+  const [localCondenseLevel, setLocalCondenseLevel] =
+    useState(condenseLevel ?? DEFAULT_CONDENSE_LEVEL);
+  const getDefaultViewMode = useCallback((value?: number): ViewMode => {
+    if (value === 3) {
+      return "3d";
+    }
+    if (value === 5) {
+      return "5d";
+    }
+    if (value === 30) {
+      return "month";
+    }
+    return "5d";
+  }, []);
+  const [viewMode, setViewMode] = useState<ViewMode>(getDefaultViewMode(dayCount));
+  const [localShowFullDay, setLocalShowFullDay] = useState(
+    showFullDay ?? true,
+  );
+  const [hiddenTimeVisible, setHiddenTimeVisible] = useState(false);
 
   const safeWeekStartDay = Number.isFinite(weekStartDay)
     ? Math.max(0, Math.min(6, weekStartDay))
@@ -138,18 +169,40 @@ export const CalendarReactView: React.FC<CalendarReactViewProps> = ({
   const viewName = viewMode === "month"
     ? "dayGridMonth"
     : `timeGridRange-${targetDayCount}`;
+  const navStepValue = typeof navStep === "number" ? navStep : 0;
+  const resolvedNavDays =
+    Number.isFinite(navStepValue) && navStepValue > 0
+      ? Math.round(navStepValue)
+      : targetDayCount;
   const safeInitialDate = entries[0]?.startDate ?? new Date();
+  const resolvedShowFullDay =
+    typeof showFullDay === "boolean" ? showFullDay : localShowFullDay;
+  const hasCustomSlotRange = !!slotRange && (
+    slotRange.min !== DEFAULT_SLOT_MIN_TIME ||
+    slotRange.max !== DEFAULT_SLOT_MAX_TIME
+  );
+  const slotMinTimeValue = hiddenTimeVisible
+    ? DEFAULT_SLOT_MIN_TIME
+    : slotRange?.min ?? DEFAULT_SLOT_MIN_TIME;
+  const slotMaxTimeValue = hiddenTimeVisible
+    ? DEFAULT_SLOT_MAX_TIME
+    : slotRange?.max ?? DEFAULT_SLOT_MAX_TIME;
+  const sliderDisabled = viewMode === "month";
+
+  useEffect(() => {
+    setViewMode(getDefaultViewMode(dayCount));
+  }, [dayCount, getDefaultViewMode]);
 
   useEffect(() => {
     const display = sliderValueRef.current;
     if (display) {
-      display.textContent = formatZoomLabel(condenseLevel);
+      display.textContent = formatZoomLabel(localCondenseLevel);
     }
-  }, [condenseLevel]);
+  }, [localCondenseLevel]);
 
   useEffect(() => {
     const api = calendarRef.current?.getApi();
-    const zoom = calculateSlotZoom(condenseLevel);
+    const zoom = calculateSlotZoom(localCondenseLevel);
     const computedSlotHeight = calculateSlotHeightFromZoom(zoom);
     document.documentElement.style.setProperty(
       "--calendar-slot-height",
@@ -165,7 +218,25 @@ export const CalendarReactView: React.FC<CalendarReactViewProps> = ({
       api.render();
       api.updateSize();
     }
-  }, [condenseLevel, showFullDay]);
+  }, [localCondenseLevel, resolvedShowFullDay, viewMode]);
+
+  useEffect(() => {
+    if (typeof condenseLevel === "number") {
+      setLocalCondenseLevel(condenseLevel);
+    }
+  }, [condenseLevel]);
+
+  useEffect(() => {
+    if (typeof showFullDay === "boolean") {
+      setLocalShowFullDay(showFullDay);
+    }
+  }, [showFullDay]);
+
+  useEffect(() => {
+    if (!slotRange) {
+      setHiddenTimeVisible(false);
+    }
+  }, [slotRange]);
 
   const normalizedDayCount = targetDayCount;
   const events = useMemo(
@@ -226,9 +297,9 @@ export const CalendarReactView: React.FC<CalendarReactViewProps> = ({
             priorityColor,
           },
           display: isAllDay ? "block" : "auto",
-          backgroundColor: "transparent",
-          borderColor: "transparent",
-          textColor: "inherit",
+          backgroundColor: priorityColor,
+          borderColor: priorityColor,
+          textColor: "#ffffff",
           "data-priority-color": priorityColor,
         };
       }),
@@ -451,15 +522,35 @@ export const CalendarReactView: React.FC<CalendarReactViewProps> = ({
     [setLabelsVisible],
   );
 
-  const handleCondenseInput = useCallback((event: React.ChangeEvent<HTMLInputElement>) => {
-    const rawValue = Number(event.currentTarget.value);
-    setCondenseLevel(
-      Math.min(
+  const handleSelect = useCallback(
+    async (selection: DateSelectArg) => {
+      if (!onCreateSelection) return;
+      const start = selection.start ?? new Date();
+      const end = selection.end ?? new Date(start.getTime() + 30 * 60000);
+      try {
+        await onCreateSelection(start, end);
+      } finally {
+        calendarRef.current?.getApi()?.unselect();
+      }
+    },
+    [onCreateSelection],
+  );
+
+  const handleCondenseInput = useCallback(
+    (event: React.ChangeEvent<HTMLInputElement>) => {
+      const rawValue = Number(event.currentTarget.value);
+      const normalized = Math.min(
         MAX_CONDENSE_LEVEL,
-        Math.max(0, Number.isFinite(rawValue) ? rawValue : DEFAULT_CONDENSE_LEVEL),
-      ),
-    );
-  }, []);
+        Math.max(
+          0,
+          Number.isFinite(rawValue) ? rawValue : DEFAULT_CONDENSE_LEVEL,
+        ),
+      );
+      setLocalCondenseLevel(normalized);
+      onCondenseLevelChange?.(normalized);
+    },
+    [onCondenseLevelChange],
+  );
 
   const handleViewChange = useCallback((mode: ViewMode) => {
     setViewMode(mode);
@@ -473,6 +564,32 @@ export const CalendarReactView: React.FC<CalendarReactViewProps> = ({
     api.changeView(`timeGridRange-${desired}`);
   }, []);
 
+  const handleHiddenTimeToggle = useCallback(() => {
+    setHiddenTimeVisible((value) => !value);
+  }, []);
+
+  const handleToggleFullDay = useCallback(() => {
+    if (onToggleFullDay) {
+      onToggleFullDay();
+      return;
+    }
+    setLocalShowFullDay((value) => !value);
+  }, [onToggleFullDay]);
+
+  const handleTodayCentered = useCallback(() => {
+    const api = calendarRef.current?.getApi();
+    if (!api) return;
+    if (viewMode === "month") {
+      api.today();
+      return;
+    }
+    const offset = Math.floor((targetDayCount - 1) / 2);
+    const target = new Date();
+    target.setHours(0, 0, 0, 0);
+    target.setDate(target.getDate() - offset);
+    api.gotoDate(target);
+  }, [targetDayCount, viewMode]);
+
   const handlePrevClick = useCallback(() => {
     const api = calendarRef.current?.getApi();
     if (!api) return;
@@ -480,8 +597,8 @@ export const CalendarReactView: React.FC<CalendarReactViewProps> = ({
       api.prev();
       return;
     }
-    api.incrementDate({ days: -targetDayCount });
-  }, [targetDayCount, viewMode]);
+    api.incrementDate({ days: -resolvedNavDays });
+  }, [resolvedNavDays, viewMode]);
 
   const handleNextClick = useCallback(() => {
     const api = calendarRef.current?.getApi();
@@ -490,8 +607,8 @@ export const CalendarReactView: React.FC<CalendarReactViewProps> = ({
       api.next();
       return;
     }
-    api.incrementDate({ days: targetDayCount });
-  }, [targetDayCount, viewMode]);
+    api.incrementDate({ days: resolvedNavDays });
+  }, [resolvedNavDays, viewMode]);
 
   const sanitizedProperties = properties ?? [];
 
@@ -595,20 +712,30 @@ export const CalendarReactView: React.FC<CalendarReactViewProps> = ({
           type="range"
           min={0}
           max={MAX_CONDENSE_LEVEL}
-          value={condenseLevel}
+          value={localCondenseLevel}
           onChange={handleCondenseInput}
+          disabled={sliderDisabled}
         />
         <span ref={sliderValueRef} className="bases-calendar-condense-value" />
+        {hasCustomSlotRange && (
+          <button
+            type="button"
+            className="bases-calendar-hidden-time-toggle"
+            onClick={handleHiddenTimeToggle}
+          >
+            {hiddenTimeVisible ? "Hide hidden time" : "Show hidden time"}
+          </button>
+        )}
         <button
           type="button"
           className="bases-calendar-full-day-toggle"
-          onClick={() => setShowFullDay((value) => !value)}
+          onClick={handleToggleFullDay}
         >
-          {showFullDay ? "Hide full-day slot" : "Show full-day slot"}
+          {resolvedShowFullDay ? "Hide full-day slot" : "Show full-day slot"}
         </button>
       </div>
       <FullCalendar
-        key={`calendar-${viewMode}-${Math.round(condenseLevel)}-${showFullDay}-${safeInitialDate.toDateString()}`}
+        key={`calendar-${viewMode}-${Math.round(localCondenseLevel)}-${resolvedShowFullDay}-${safeInitialDate.toDateString()}`}
         ref={calendarRef}
         plugins={[timeGridPlugin, interactionPlugin, dayGridPlugin]}
         initialView={viewName}
@@ -642,19 +769,14 @@ export const CalendarReactView: React.FC<CalendarReactViewProps> = ({
           },
           todayCentered: {
             text: "Today",
-            click: () => calendarRef.current?.getApi()?.today(),
+            click: handleTodayCentered,
           },
         }}
         buttonText={{ today: "Today" }}
         selectable={!!onCreateSelection}
         selectMirror={false}
         selectOverlap
-        select={(selection) => {
-          if (!onCreateSelection) return;
-          const start = selection.start ?? new Date();
-          const end = selection.end ?? new Date(start.getTime() + 30 * 60000);
-          onCreateSelection(start, end);
-        }}
+        select={handleSelect}
         selectLongPressDelay={800}
         longPressDelay={800}
         editable={editable}
@@ -679,8 +801,8 @@ export const CalendarReactView: React.FC<CalendarReactViewProps> = ({
           day: "numeric",
         }}
         firstDay={safeWeekStartDay}
-        slotMinTime={DEFAULT_SLOT_MIN_TIME}
-        slotMaxTime={DEFAULT_SLOT_MAX_TIME}
+        slotMinTime={slotMinTimeValue}
+        slotMaxTime={slotMaxTimeValue}
         scrollTime={DEFAULT_SCROLL_TIME}
         slotDuration="00:30:00"
         snapDuration="00:05:00"
@@ -690,7 +812,7 @@ export const CalendarReactView: React.FC<CalendarReactViewProps> = ({
           minute: "2-digit",
           hour12: false,
         }}
-        allDaySlot={showFullDay}
+        allDaySlot={resolvedShowFullDay}
         displayEventTime={false}
         displayEventEnd={false}
       />
