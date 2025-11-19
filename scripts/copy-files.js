@@ -7,22 +7,23 @@ const __dirname = path.dirname(__filename);
 const rootDir = path.resolve(__dirname, "..");
 const buildDir = path.join(rootDir, "build");
 
-// Copy main.js from build to root
-const mainJsSrc = path.join(buildDir, "main.js");
-const mainJsDest = path.join(rootDir, "main.js");
-fs.copyFileSync(mainJsSrc, mainJsDest);
-console.log("✓ Copied main.js to root");
+const assets = ["main.js", "manifest.json", "styles.css"];
 
-// Copy manifest.json from build to root
-const manifestSrc = path.join(buildDir, "manifest.json");
-const manifestDest = path.join(rootDir, "manifest.json");
-fs.copyFileSync(manifestSrc, manifestDest);
-console.log("✓ Copied manifest.json to root");
+for (const asset of assets) {
+  const srcInBuild = path.join(buildDir, asset);
+  const destInRoot = path.join(rootDir, asset);
+  const srcInRoot = path.join(rootDir, asset);
+  const destInBuild = path.join(buildDir, asset);
 
-// Copy styles.css from build to root
-const stylesSrc = path.join(buildDir, "styles.css");
-const stylesDest = path.join(rootDir, "styles.css");
-fs.copyFileSync(stylesSrc, stylesDest);
-console.log("✓ Copied styles.css to root");
+  if (fs.existsSync(srcInBuild)) {
+    fs.copyFileSync(srcInBuild, destInRoot);
+    console.log(`✓ Copied ${asset} from build to root`);
+  }
+
+  if (fs.existsSync(srcInRoot)) {
+    fs.copyFileSync(srcInRoot, destInBuild);
+    console.log(`✓ Copied ${asset} from root to build`);
+  }
+}
 
 console.log("\n✅ Plugin files copied to root for BRAT compatibility.");
