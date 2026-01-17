@@ -1,0 +1,1305 @@
+:root {
+  --calendar-slot-height: 48px;
+  --calendar-slot-zoom: 1;
+  --calendar-slot-border: rgba(255, 255, 255, 0.08);
+  --calendar-condense-background: rgba(29, 78, 216, 0.25);
+}
+
+/* Flex layout: allow any Bases in-view toolbar/header to sit above the calendar,
+   while the calendar fills the remaining height in both sidebar and main panes. */
+.bases-calendar-scroll {
+  height: 100%;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  padding: 0;
+}
+
+.bases-calendar-container {
+  font-family: var(--font-interface);
+  position: relative;
+  z-index: 0;
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 0%;
+  min-height: 0;
+  width: 100%;
+  background:
+    radial-gradient(
+      circle at 20% -20%,
+      rgba(59, 130, 246, 0.4),
+      transparent 45%
+    ),
+    radial-gradient(
+      circle at 80% 0%,
+      rgba(255, 255, 255, 0.08),
+      transparent 30%
+    ),
+    #03050c;
+  color: #f7f7fb;
+  overflow: hidden;
+}
+
+/* Ensure Bases/Obsidian option panels render above the calendar canvas */
+.workspace-leaf-content[data-type="calendar"] .menu,
+.workspace-leaf-content[data-type="calendar-bases-view"] .menu,
+.workspace-leaf-content[data-type="calendar"] .popover,
+.workspace-leaf-content[data-type="calendar-bases-view"] .popover,
+.workspace-leaf-content[data-type="calendar"] .suggestion-container,
+.workspace-leaf-content[data-type="calendar-bases-view"] .suggestion-container,
+.workspace-leaf-content[data-type="calendar"] .dropdown,
+.workspace-leaf-content[data-type="calendar-bases-view"] .dropdown {
+  position: relative;
+  z-index: 10000;
+}
+
+/* Keep header chrome above the calendar canvas */
+.workspace-leaf-content[data-type="calendar"] .view-header,
+.workspace-leaf-content[data-type="calendar-bases-view"] .view-header,
+.workspace-leaf-content[data-type="calendar"] .bases-header,
+.workspace-leaf-content[data-type="calendar-bases-view"] .bases-header,
+.workspace-leaf-content[data-type="calendar"] .bases-view-header,
+.workspace-leaf-content[data-type="calendar-bases-view"] .bases-view-header {
+  position: relative;
+  z-index: 5;
+  /* Allow Bases view options dropdowns/panels to escape header bounds */
+  overflow: visible;
+}
+
+/* Note: `--tps-bases-header-height` is set dynamically by the view at runtime. */
+
+.bases-calendar-wrapper {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  min-height: 0;
+  /* Critical for flex children to shrink */
+  height: 100%;
+}
+
+/* Ensure FullCalendar fills available space */
+.bases-calendar-wrapper .fc {
+  flex: 1;
+  min-height: 0;
+  height: 100%;
+}
+
+.bases-calendar-wrapper .fc-view-harness {
+  height: 100% !important;
+  flex: 1;
+}
+
+.bases-calendar-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 400px;
+  color: var(--text-muted);
+  font-size: var(--font-ui-medium);
+}
+
+.fc-header-toolbar {
+  background: rgba(6, 8, 15, 0.9);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  backdrop-filter: blur(12px);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  flex-wrap: nowrap;
+  overflow-x: auto;
+}
+
+.fc .fc-toolbar-title {
+  font-size: 0.85rem;
+  color: #fff;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+}
+
+.fc .fc-toolbar-chunk button,
+.fc-header-toolbar .fc-button {
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: #f6f6ff;
+  border-radius: 6px;
+  padding: 4px 10px;
+  font-size: 0.75rem;
+  text-transform: none;
+  white-space: nowrap;
+}
+
+.fc-header-toolbar .fc-toolbar-chunk {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  flex-wrap: nowrap;
+  min-width: 0;
+}
+
+.bases-calendar-toggle-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 8px;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  background: var(--calendar-condense-background);
+  flex-wrap: wrap;
+}
+
+.bases-calendar-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 6px;
+  flex-wrap: wrap;
+  padding: 4px 8px;
+}
+
+.bases-calendar-toolbar-group {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+
+.bases-calendar-toolbar-button {
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: #f6f6ff;
+  border-radius: 5px;
+  padding: 3px 8px;
+  font-size: 0.7rem;
+  cursor: pointer;
+  text-transform: none;
+  min-width: 44px;
+}
+
+.bases-calendar-toolbar-button.is-active {
+  background: rgba(147, 197, 253, 0.2);
+  border-color: rgba(59, 130, 246, 0.6);
+}
+
+.bases-calendar-hidden-time-toggle,
+.bases-calendar-full-day-toggle {
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 6px;
+  padding: 3px 9px;
+  color: #f5f5f5;
+  font-size: 0.65rem;
+  letter-spacing: 0.08em;
+  cursor: pointer;
+}
+
+.bases-calendar-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 6px;
+  flex-wrap: nowrap;
+  padding: 4px 8px;
+  overflow: hidden;
+}
+
+.bases-calendar-toolbar-group {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-wrap: nowrap;
+}
+
+.bases-calendar-toolbar-button {
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: #f6f6ff;
+  border-radius: 5px;
+  padding: 3px 8px;
+  font-size: 0.7rem;
+  cursor: pointer;
+  text-transform: none;
+  min-width: 44px;
+}
+
+.bases-calendar-toolbar-button.is-active {
+  background: rgba(147, 197, 253, 0.2);
+  border-color: rgba(59, 130, 246, 0.6);
+}
+
+.fc .fc-timegrid-all-day {
+  position: sticky;
+  top: 0;
+  z-index: 4;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.fc .fc-timegrid-all-day .fc-timegrid-all-day-cushion {
+  background: transparent;
+}
+
+.fc {
+  background: #02040c;
+  color: #f8fafc;
+}
+
+.fc-event {
+  min-height: 0;
+  cursor: pointer;
+}
+
+/* Increased specificity to override FullCalendar defaults and any transparency hacks */
+.fc .fc-event.bases-calendar-event:not(.is-external) {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: stretch;
+  justify-content: flex-start;
+  border-radius: 4px;
+  --priority-color: #60a5fa;
+  /* Fallback background if color-mix is not supported */
+  background: var(--priority-color) !important;
+  /* Gradient background */
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--priority-color) 18%, rgba(14, 165, 233, 0.25)),
+    color-mix(in srgb, var(--priority-color) 50%, rgba(14, 165, 233, 0.5))
+  ) !important;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.28);
+  transition:
+    transform 0.2s ease,
+    opacity 0.2s ease;
+  position: relative;
+  overflow: hidden;
+  opacity: 0.95 !important;
+  padding: 0;
+  box-sizing: border-box;
+  border: 1px solid rgba(0, 0, 0, 0.3) !important;
+  outline: none;
+  outline-offset: 0;
+}
+
+.bases-calendar-event:hover {
+  /* No transform - prevents flickering */
+  cursor: pointer;
+}
+
+.bases-calendar-event-title {
+  width: 100%;
+  color: #fff;
+  font-weight: 500;
+  font-size: clamp(0.65rem, calc(1rem * var(--calendar-slot-zoom)), 0.9rem);
+  text-align: left;
+  line-height: 1.3;
+  letter-spacing: 0.01em;
+  padding: 3px 5px;
+  margin: 0;
+  box-sizing: border-box;
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  line-clamp: 3;
+  -webkit-box-orient: vertical;
+  word-break: break-word;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.9);
+  font-family: var(--font-interface);
+}
+
+/* Recurrence Indicator */
+.bases-calendar-event.is-recurring::after {
+  content: "🔄";
+  position: absolute;
+  right: 2px;
+  bottom: 2px;
+  font-size: 0.8em;
+  opacity: 0.7;
+  pointer-events: none;
+}
+
+/* External calendar indicator */
+.bases-calendar-event.is-external::after {
+  content: "📅";
+  position: absolute;
+  right: 2px;
+  bottom: 2px;
+  font-size: 0.8em;
+  opacity: 0.7;
+  pointer-events: none;
+}
+
+/* Ghost Event Styling */
+.bases-calendar-event.is-ghost {
+  opacity: 0.6;
+  font-style: italic;
+}
+
+.bases-calendar-event.is-ghost .fc-event-title {
+  opacity: 0.8;
+}
+
+.bases-calendar-time-top,
+.bases-calendar-time-bottom {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: clamp(0.5rem, calc(0.9rem * var(--calendar-slot-zoom)), 0.85rem);
+  font-weight: 700;
+  color: #fff;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.6);
+  pointer-events: none;
+  padding: 2px 4px;
+  opacity: 0;
+  transition: opacity 0.1s ease;
+}
+
+.bases-calendar-time-top {
+  top: -12px;
+}
+
+.bases-calendar-time-bottom {
+  bottom: -12px;
+}
+
+.bases-calendar-time-top.is-visible,
+.bases-calendar-time-bottom.is-visible {
+  opacity: 1;
+}
+
+.bases-calendar-event.bases-calendar-status-strikethrough
+  .bases-calendar-event-title,
+.bases-calendar-event.bases-calendar-status-line-through
+  .bases-calendar-event-title {
+  text-decoration: line-through !important;
+}
+
+.bases-calendar-event.bases-calendar-status-bold .bases-calendar-event-title {
+  font-weight: 700 !important;
+}
+
+.bases-calendar-event.bases-calendar-status-italic .bases-calendar-event-title {
+  font-style: italic !important;
+}
+
+.bases-calendar-event.bases-calendar-status-strikethrough .fc-event-title,
+.bases-calendar-event.bases-calendar-status-line-through .fc-event-title {
+  text-decoration: line-through !important;
+}
+
+.bases-calendar-event.bases-calendar-status-bold .fc-event-title {
+  font-weight: 700 !important;
+}
+
+.bases-calendar-event.bases-calendar-status-italic .fc-event-title {
+  font-style: italic !important;
+}
+
+.bases-calendar-event-priority-high {
+  border-left: 3px solid #ff6b6b !important;
+}
+
+.bases-calendar-event-priority-medium {
+  border-left: 3px solid #fbbf24 !important;
+}
+
+.bases-calendar-event-priority-low {
+  border-left: 3px solid #38bdf8 !important;
+}
+
+.bases-calendar-event.bases-calendar-event-status-complete {
+  opacity: 0.6 !important;
+}
+
+.bases-calendar-event.bases-calendar-event-status-blocked {
+  opacity: 0.85 !important;
+  filter: grayscale(0.5);
+}
+
+.bases-calendar-event-content {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  height: 100%;
+  overflow: hidden;
+}
+
+.bases-calendar-event-properties {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  font-size: clamp(0.55rem, calc(0.75rem * var(--calendar-slot-zoom)), 0.7rem);
+  opacity: 0.9;
+}
+
+.bases-calendar-event-property {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.bases-calendar-event-property-value {
+  color: rgba(255, 255, 255, 0.95);
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.8);
+}
+
+.fc-timegrid-event-harness .fc-event-main {
+  padding: 0 !important;
+  background: transparent !important;
+}
+
+.fc-timegrid-event-harness .fc-event-main,
+.fc .fc-event {
+  /* Removed border: none !important here to allow priority borders */
+  margin: 0 !important;
+  width: 100% !important;
+  height: 100% !important;
+}
+
+.fc-event-time,
+.fc-event-time-range {
+  display: none !important;
+}
+
+.bases-calendar-status-strikethrough .fc-event-title,
+.bases-calendar-status-strikethrough .bases-calendar-event-title,
+.bases-calendar-status-line-through .fc-event-title,
+.bases-calendar-status-line-through .bases-calendar-event-title {
+  text-decoration: line-through !important;
+}
+
+.bases-calendar-status-bold .fc-event-title,
+.bases-calendar-status-bold .bases-calendar-event-title {
+  font-weight: 700 !important;
+}
+
+.bases-calendar-status-italic .fc-event-title,
+.bases-calendar-status-italic .bases-calendar-event-title {
+  font-style: italic !important;
+}
+
+.fc .fc-timegrid-axis .fc-scrollgrid-sync-inner {
+  display: flex;
+  align-items: stretch;
+}
+
+.fc .fc-timegrid-axis .fc-scrollgrid-sync-inner .fc-axis-frame {
+  display: flex;
+  align-items: flex-start;
+  justify-content: flex-end;
+  padding-right: 4px;
+  /* Reduced from 8px */
+}
+
+.fc-timegrid-slot-lane,
+.fc-timegrid-slot,
+.fc-timegrid-slot-label {
+  height: var(--calendar-slot-height) !important;
+  line-height: var(--calendar-slot-height) !important;
+  border-bottom: 1px solid var(--calendar-slot-border);
+}
+
+/* Emphasize noon line */
+.fc-timegrid-slot-lane:nth-of-type(25),
+.fc-timegrid-slot:nth-of-type(25) {
+  border-bottom: 2px solid rgba(255, 255, 255, 0.35);
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.4);
+}
+
+.fc-timegrid-slot-lane {
+  background: rgba(255, 255, 255, 0.01);
+}
+
+.fc-timegrid-slot-lane:nth-of-type(2n) {
+  background: rgba(255, 255, 255, 0.02);
+}
+
+/* Morning hours (before noon) - lighter background with warm tint */
+.fc-timegrid-slot-lane:nth-of-type(-n + 24) {
+  background: rgba(255, 250, 230, 0.04);
+}
+
+.fc-timegrid-slot-lane:nth-of-type(2n):nth-of-type(-n + 24) {
+  background: rgba(255, 250, 230, 0.055);
+}
+
+.fc-timegrid-slot {
+  border-left: 1px solid rgba(255, 255, 255, 0.04);
+}
+
+.fc-timegrid-slot:hover {
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.fc .fc-timegrid-axis,
+.fc .fc-timegrid-axis-frame,
+.fc-scrollgrid-shrink {
+  font-size: 0.55rem;
+  letter-spacing: 0.02em;
+  color: rgba(255, 255, 255, 0.6);
+  width: 36px !important;
+  min-width: 36px !important;
+  max-width: 36px !important;
+}
+
+.fc .fc-timegrid-axis-cushion {
+  padding: 0 2px !important;
+}
+
+/* Force the time column cells to be narrower */
+.fc td.fc-timegrid-axis {
+  width: 36px !important;
+}
+
+.fc-timegrid-slot .fc-event {
+  width: 100%;
+}
+
+.fc .fc-timegrid-slots .fc-scrollgrid-section > .fc-scrollgrid-section-inner {
+  border-top: 1px solid rgba(255, 255, 255, 0.04);
+}
+
+.bases-calendar-condense-control input[type="range"] {
+  margin: 0;
+}
+
+.bases-calendar-condense-control {
+  flex-wrap: wrap;
+}
+
+.bases-calendar-condense-range {
+  min-width: 80px;
+  width: 100px;
+  max-width: 120px;
+  cursor: pointer;
+}
+
+@media (max-width: 768px) {
+  .bases-calendar-condense-control {
+    width: 100%;
+    justify-content: flex-start;
+  }
+
+  .bases-calendar-condense-label,
+  .bases-calendar-condense-value {
+    font-size: 0.6rem;
+  }
+
+  .bases-calendar-full-day-toggle {
+    font-size: 0.55rem;
+  }
+
+  /* Mobile Header Fixes */
+  .bases-calendar-toggle-row {
+    flex-wrap: wrap;
+    height: auto;
+    gap: 8px;
+  }
+
+  .fc-header-toolbar {
+    flex-wrap: wrap;
+    height: auto !important;
+    gap: 8px;
+    padding: 8px 4px;
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .fc-toolbar-chunk {
+    display: flex;
+    justify-content: space-between;
+    width: 100%;
+  }
+
+  /* Center the title chunk */
+  .fc-toolbar-chunk:nth-child(2) {
+    justify-content: center;
+    order: -1;
+    /* Move title to top */
+    margin-bottom: 4px;
+  }
+
+  .fc .fc-toolbar-title {
+    font-size: 1.1rem;
+    text-align: center;
+  }
+
+  .fc .fc-button {
+    padding: 6px 12px;
+    /* Larger touch targets */
+  }
+}
+
+/* 
+   Override the aggressive transparency rule for our custom events.
+   We target the specific class combination to ensure specificity wins.
+*/
+.fc .fc-timegrid-event.bases-calendar-event,
+.fc .fc-timegrid-event-harness .bases-calendar-event,
+.fc .fc-timegrid-event .fc-event-main .bases-calendar-event {
+  /* Fallback background if color-mix is not supported */
+  background: var(--priority-color) !important;
+  /* Gradient background */
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--priority-color) 35%, rgba(14, 165, 233, 0.5)),
+    color-mix(in srgb, var(--priority-color) 80%, rgba(14, 165, 233, 0.95))
+  ) !important;
+  opacity: 1 !important;
+}
+
+/* Bring hovered event to front - use z-index on harness only */
+.fc-timegrid-event-harness {
+  transition: z-index 0s;
+}
+
+.fc-timegrid-event-harness:hover {
+  z-index: 100 !important;
+}
+
+/* Popout effect using box-shadow and brightness - no transform to avoid flickering */
+.bases-calendar-event {
+  transition:
+    box-shadow 0.15s ease-out,
+    filter 0.15s ease-out;
+}
+
+.bases-calendar-event:hover {
+  cursor: pointer;
+  box-shadow:
+    0 4px 12px rgba(0, 0, 0, 0.4),
+    0 0 0 2px rgba(255, 255, 255, 0.15);
+  filter: brightness(1.1);
+}
+
+/* 
+   Keep the transparency for the container elements to avoid double backgrounds,
+   BUT ensure it doesn't affect our custom event class if it's applied to the same element.
+   The :not(.bases-calendar-event) selector helps here.
+*/
+.fc .fc-timegrid-event:not(.bases-calendar-event),
+.fc .fc-timegrid-event-harness:not(.bases-calendar-event),
+.fc .fc-timegrid-event .fc-event-main:not(.bases-calendar-event) {
+  background: transparent !important;
+  border-color: transparent !important;
+}
+
+/* External drop zone styling - subtle highlight on grid only */
+.bases-calendar-wrapper.is-drag-over .fc-timegrid-slots,
+.bases-calendar-wrapper.is-drag-over .fc-daygrid-body {
+  box-shadow: inset 0 0 0 2px rgba(59, 130, 246, 0.4);
+  border-radius: 4px;
+}
+
+/* Subtle tint on slots when dragging */
+.bases-calendar-wrapper.is-drag-over .fc-timegrid-slot-lane {
+  background: rgba(59, 130, 246, 0.03) !important;
+}
+
+.bases-calendar-wrapper.is-drag-over .fc-daygrid-day-frame {
+  background: rgba(59, 130, 246, 0.03) !important;
+}
+
+/* External calendar events styling */
+.bases-calendar-event.is-external {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: stretch;
+  justify-content: flex-start;
+  border-radius: 4px;
+  /* Background set via inline style from React */
+  border: 1px solid rgba(255, 255, 255, 0.2) !important;
+  border-left-width: 3px !important;
+  border-left-style: solid !important;
+  /* Border color set via inline style from React (borderColor prop) */
+  opacity: 0.9 !important;
+  font-style: italic;
+  cursor: pointer;
+  padding: 0;
+  box-sizing: border-box;
+  overflow: hidden;
+}
+
+.bases-calendar-event.is-external:hover {
+  filter: brightness(1.1);
+  /* Lighten on hover instead of hardcoded color */
+  opacity: 1 !important;
+}
+
+/* External event modal styling */
+.external-event-modal {
+  padding: 20px;
+}
+
+.external-event-details {
+  margin-top: 16px;
+}
+
+.external-event-field {
+  margin-bottom: 12px;
+  line-height: 1.6;
+}
+
+.external-event-field strong {
+  color: var(--text-accent);
+  margin-right: 4px;
+}
+
+.external-event-description {
+  margin-top: 4px;
+  padding: 10px;
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 4px;
+  white-space: pre-wrap;
+  font-size: 0.9em;
+}
+
+/* Past events styling */
+.bases-calendar-event.is-past,
+.bases-calendar-event.is-external.is-past {
+  opacity: 0.55 !important;
+  /* Visible but dimmed, keep original color */
+}
+
+.bases-calendar-event.is-past .bases-calendar-event-title,
+.bases-calendar-event.is-past .fc-event-title,
+.bases-calendar-event.is-external.is-past .bases-calendar-event-title {
+  text-decoration: line-through !important;
+  opacity: 0.8;
+}
+
+/* Hidden events styling */
+.bases-calendar-event.is-hidden-event {
+  opacity: 0.5 !important;
+  border: 2px dashed rgba(255, 255, 255, 0.4) !important;
+  filter: grayscale(0.8);
+}
+
+.bases-calendar-event.is-hidden-event::after {
+  content: "👁️‍🗨️";
+  position: absolute;
+  right: 2px;
+  bottom: 2px;
+  font-size: 0.8em;
+  opacity: 0.7;
+  pointer-events: none;
+}
+
+/* Note: we do NOT hide the Obsidian/Bases header; it contains Sort/Filter/Properties and is needed when moving the view between panes. */
+
+/* Mobile adjustments */
+@media (max-width: 768px) {
+}
+
+/* Mobile-specific: Ensure Sort button is hidden and nav is in front */
+body.is-mobile .workspace-leaf[data-type="calendar"] .view-header .clickable-icon[aria-label*="Sort"],
+body.is-mobile .workspace-leaf[data-type="calendar"] .view-header button[aria-label*="Sort"],
+body.is-mobile .workspace-leaf[data-type="calendar"] .view-header .view-action[aria-label*="Sort"],
+body.is-mobile .workspace-leaf-content[data-type="calendar"] .view-header .clickable-icon[aria-label*="Sort"],
+body.is-mobile .workspace-leaf-content[data-type="calendar"] .view-header button[aria-label*="Sort"],
+body.is-mobile .workspace-leaf-content[data-type="calendar"] .view-header .view-action[aria-label*="Sort"],
+/* Target sort icon by common Lucide/icon class patterns */
+body.is-mobile .workspace-leaf[data-type="calendar"] .view-header .lucide-arrow-up-down,
+body.is-mobile .workspace-leaf[data-type="calendar"] .view-header .lucide-sort-asc,
+body.is-mobile .workspace-leaf[data-type="calendar"] .view-header .lucide-sort-desc,
+body.is-mobile .workspace-leaf[data-type="calendar"] .view-header svg.svg-icon.lucide-arrow-up-down,
+body.is-mobile .workspace-leaf-content[data-type="calendar"] .view-header .lucide-arrow-up-down,
+body.is-mobile .workspace-leaf-content[data-type="calendar"] .view-header .lucide-sort-asc,
+body.is-mobile .workspace-leaf-content[data-type="calendar"] .view-header .lucide-sort-desc,
+/* Target the clickable-icon containing the sort SVG */
+body.is-mobile .workspace-leaf[data-type="calendar"] .view-header .clickable-icon:has(.lucide-arrow-up-down),
+body.is-mobile .workspace-leaf[data-type="calendar"] .view-header .clickable-icon:has(svg[class*="sort"]),
+body.is-mobile .workspace-leaf-content[data-type="calendar"] .view-header .clickable-icon:has(.lucide-arrow-up-down),
+body.is-mobile .workspace-leaf-content[data-type="calendar"] .view-header .clickable-icon:has(svg[class*="sort"]) {
+  display: none !important;
+  visibility: hidden !important;
+  pointer-events: none !important;
+  position: absolute !important;
+  left: -9999px !important;
+}
+
+/* Hide Sort in Bases-plugin specific headers */
+body.is-mobile .bases-view-header .clickable-icon[aria-label*="Sort"],
+body.is-mobile .bases-view-header button[aria-label*="Sort"],
+body.is-mobile .bases-toolbar .clickable-icon[aria-label*="Sort"],
+body.is-mobile .bases-toolbar button[aria-label*="Sort"],
+body.is-mobile .bases-header .clickable-icon[aria-label*="Sort"],
+body.is-mobile .bases-header button[aria-label*="Sort"],
+/* Target by icon class in Bases headers */
+body.is-mobile .bases-view-header .lucide-arrow-up-down,
+body.is-mobile .bases-view-header .clickable-icon:has(.lucide-arrow-up-down),
+body.is-mobile .bases-toolbar .lucide-arrow-up-down,
+body.is-mobile .bases-toolbar .clickable-icon:has(.lucide-arrow-up-down) {
+  display: none !important;
+  visibility: hidden !important;
+  pointer-events: none !important;
+  position: absolute !important;
+  left: -9999px !important;
+}
+
+/* Time Log Event Styling - Stopwatch Icon */
+.bases-calendar-time-log {
+  position: relative;
+  /* Ensure absolute positioning works */
+}
+
+.bases-calendar-time-log::after {
+  content: "";
+  position: absolute;
+  bottom: 4px;
+  /* Moved to bottom right */
+  right: 4px;
+  width: 14px;
+  height: 14px;
+  background-color: currentColor;
+  mask-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="black" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="14" r="8"/><path d="M12 2v4"/><path d="m22 7-3-3"/><path d="m2 7 3-3"/></svg>');
+  -webkit-mask-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="black" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="14" r="8"/><path d="M12 2v4"/><path d="m22 7-3-3"/><path d="m2 7 3-3"/></svg>');
+  mask-size: contain;
+  -webkit-mask-size: contain;
+  mask-repeat: no-repeat;
+  -webkit-mask-repeat: no-repeat;
+  opacity: 0.7;
+  pointer-events: none;
+}
+
+/* Standardize Header Text (Remove blue link color) */
+.fc .fc-col-header-cell-cushion {
+  /* color: var(--text-normal) !important; removed to match desktop link color */
+  text-decoration: none !important;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  overflow: hidden;
+  display: block;
+  width: 100%;
+  max-width: 100%;
+}
+
+.fc .fc-col-header-cell-cushion:hover {
+  text-decoration: none !important;
+  text-decoration: none !important;
+  /* color: var(--text-normal) !important; removed */
+}
+
+/* Mobile Floating Today Button */
+body.is-mobile .bases-calendar-mobile-nav-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 24px;
+}
+
+body.is-mobile .bases-calendar-mobile-nav-btn {
+  background: rgba(255, 255, 255, 0.12) !important;
+  color: #fff !important;
+  border: 1px solid rgba(255, 255, 255, 0.2) !important;
+  border-radius: 50% !important;
+  width: 44px;
+  height: 44px;
+  font-size: 1.25rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer !important;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.25);
+}
+
+body.is-mobile .bases-calendar-mobile-nav-btn:disabled {
+  opacity: 0.6;
+  cursor: default !important;
+}
+
+body.is-mobile .bases-calendar-mobile-today-fab {
+  position: relative !important;
+  bottom: auto !important;
+  left: auto !important;
+  transform: none !important;
+  z-index: 100 !important;
+  padding: 12px 32px !important;
+  border-radius: 28px !important;
+  background: linear-gradient(135deg, #3b82f6, #60a5fa) !important;
+  color: #fff !important;
+  border: none !important;
+  font-size: 1.05rem !important;
+  font-weight: 600 !important;
+  box-shadow: 0 4px 16px rgba(59, 130, 246, 0.5) !important;
+  cursor: pointer !important;
+  min-width: 100px;
+  min-height: 48px;
+}
+
+body.is-mobile .bases-calendar-mobile-today-fab:active {
+  transform: scale(0.95) !important;
+}
+
+/* Embed highlight effect when clicking event from calendar */
+.tps-calendar-embed-highlight {
+  animation: tps-embed-highlight-pulse 2s ease-out forwards;
+  border-radius: 6px;
+  position: relative;
+}
+
+.tps-calendar-embed-highlight::before {
+  content: "";
+  position: absolute;
+  inset: -4px;
+  border: 2px solid rgba(59, 130, 246, 0.7);
+  border-radius: 8px;
+  animation: tps-embed-highlight-border 2s ease-out forwards;
+  pointer-events: none;
+}
+
+@keyframes tps-embed-highlight-pulse {
+  0% {
+    background: rgba(59, 130, 246, 0.25);
+    box-shadow: 0 0 20px rgba(59, 130, 246, 0.4);
+  }
+
+  50% {
+    background: rgba(59, 130, 246, 0.15);
+    box-shadow: 0 0 12px rgba(59, 130, 246, 0.3);
+  }
+
+  100% {
+    background: transparent;
+    box-shadow: none;
+  }
+}
+
+@keyframes tps-embed-highlight-border {
+  0% {
+    opacity: 1;
+  }
+
+  70% {
+    opacity: 0.5;
+  }
+
+  100% {
+    opacity: 0;
+  }
+}
+
+/* Mini Mode Scoped Styles (Sidebar Only) */
+.bases-calendar-mini .fc-dayGridMonth-view .fc-col-header-cell-cushion {
+  font-size: 0.7rem !important;
+  padding: 1px 0 !important;
+}
+
+.bases-calendar-mini .fc-dayGridMonth-view .fc-daygrid-day-number {
+  font-size: 0.7rem !important;
+  padding: 1px 2px !important;
+}
+
+.bases-calendar-mini .fc-dayGridMonth-view .fc-daygrid-event {
+  font-size: 0.65rem !important;
+  padding: 0 2px !important;
+  margin: 1px !important;
+  min-height: 14px !important;
+  line-height: 1.1 !important;
+}
+
+.bases-calendar-mini .fc-dayGridMonth-view .fc-daygrid-more-link {
+  font-size: 0.65rem !important;
+  text-align: center;
+  display: block;
+}
+
+/* Ensure main view remains readable (Reset or default) */
+.fc-dayGridMonth-view .fc-event-title {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Header Portal Navigation */
+.tps-calendar-nav-portal {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  pointer-events: none;
+  /* Allow clicks to pass through the container */
+  position: relative;
+  z-index: 10;
+}
+
+.tps-calendar-nav-portal > * {
+  pointer-events: auto;
+  /* Re-enable clicks for actual buttons */
+}
+
+.bases-calendar-header-portal {
+  display: flex !important;
+  align-items: center;
+  gap: 8px;
+}
+
+.bases-calendar-header-portal .bases-calendar-header-title {
+  font-size: var(--font-ui-small);
+  font-weight: var(--font-medium);
+  color: var(--text-normal);
+  cursor: pointer;
+  margin: 0 4px;
+  white-space: nowrap;
+}
+
+.bases-calendar-header-portal .clickable-icon {
+  color: var(--text-muted);
+  opacity: 0.8;
+}
+
+.bases-calendar-header-portal .clickable-icon:hover {
+  color: var(--text-normal);
+  opacity: 1;
+}
+
+/* Hide the old internal header if it somehow persists */
+.bases-calendar-header-sticky {
+  display: none !important;
+}
+
+/* ===== Line Schedule Events ===== */
+.bases-calendar-event.bases-calendar-line-schedule {
+  /* Distinct styling for inline line schedules */
+  /* Background and border colors are set via inline styles from the plugin color setting */
+  border-left-width: 3px !important;
+  border-left-style: solid !important;
+  border-radius: 4px;
+  position: relative;
+}
+
+.bases-calendar-event.bases-calendar-line-schedule.is-task::before {
+  content: "☐";
+  position: absolute;
+  left: 4px;
+  top: 2px;
+  font-size: 0.7em;
+  opacity: 0.8;
+  pointer-events: none;
+}
+
+.bases-calendar-event.bases-calendar-line-schedule.task-status-complete::before {
+  content: "☑";
+  opacity: 0.6;
+}
+
+.bases-calendar-event.bases-calendar-line-schedule.task-status-cancelled::before {
+  content: "☒";
+  opacity: 0.5;
+}
+
+.bases-calendar-event.bases-calendar-line-schedule.task-status-in-progress::before {
+  content: "⏳";
+}
+
+.bases-calendar-event.bases-calendar-line-schedule.task-status-important::before {
+  content: "❗";
+}
+
+.bases-calendar-event.bases-calendar-line-schedule::after {
+  content: "📝";
+  position: absolute;
+  right: 2px;
+  bottom: 2px;
+  font-size: 0.7em;
+  opacity: 0.6;
+  pointer-events: none;
+}
+
+.bases-calendar-event.bases-calendar-line-schedule .bases-calendar-event-title {
+  padding-left: 18px;
+  /* Make room for checkbox icon */
+}
+
+.bases-calendar-event.bases-calendar-line-schedule:hover {
+  filter: brightness(1.15);
+}
+/* Rule Builder Styles */
+.calendar-rule-group {
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 8px;
+  padding: 10px;
+  background: var(--background-primary);
+  margin-bottom: 12px;
+}
+
+.calendar-rule-group-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+  cursor: pointer;
+}
+
+.calendar-rule-group-body {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-left: 12px;
+  border-left: 2px solid var(--background-modifier-border);
+}
+
+.calendar-rule-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px;
+  background: var(--background-secondary);
+  border-radius: 6px;
+  border: 1px solid var(--background-modifier-border);
+}
+
+.calendar-rule-inputs {
+  display: flex;
+  gap: 8px;
+  flex: 1;
+  flex-wrap: wrap;
+}
+
+.calendar-rule-select,
+.calendar-rule-input {
+  background: var(--background-modifier-form-field);
+  border: 1px solid var(--background-modifier-border);
+  color: var(--text-normal);
+  padding: 4px 8px;
+  border-radius: 4px;
+}
+
+.calendar-rule-btn {
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 4px;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+}
+.calendar-rule-btn:hover {
+  background: var(--background-modifier-hover);
+  color: var(--text-normal);
+}
+.calendar-rule-btn.is-danger:hover {
+  color: var(--text-error);
+  background: var(--background-modifier-error-hover);
+}
+
+/* Tabs */
+.calendar-builder-tabs {
+  display: flex;
+  gap: 2px;
+  margin-bottom: 16px;
+  border-bottom: 1px solid var(--background-modifier-border);
+}
+.calendar-builder-tab {
+  padding: 8px 16px;
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  color: var(--text-muted);
+  transition: all 0.2s;
+}
+.calendar-builder-tab.is-active {
+  color: var(--text-normal);
+  border-bottom-color: var(--interactive-accent);
+  font-weight: 500;
+}
+
+/* Fix for black artifact on today/current day column */
+/* Ultra-high specificity to override FullCalendar defaults */
+.bases-calendar-wrapper .fc .fc-day-today,
+.bases-calendar-wrapper .fc .fc-col-header-cell.fc-day-today,
+.bases-calendar-wrapper .fc .fc-timegrid-col.fc-day-today,
+.bases-calendar-wrapper .fc-theme-standard .fc-day-today,
+.bases-calendar-wrapper .fc-theme-standard td.fc-day-today,
+.bases-calendar-wrapper .fc-theme-standard th.fc-day-today,
+.fc .fc-day-today,
+.fc .fc-col-header-cell.fc-day-today,
+.fc .fc-timegrid-col.fc-day-today,
+.fc-theme-standard .fc-day-today,
+.fc-theme-standard td.fc-day-today,
+.fc-theme-standard th.fc-day-today {
+  background: transparent !important;
+  background-color: transparent !important;
+}
+
+/* Override any FullCalendar default today background */
+.bases-calendar-wrapper .fc-day-today,
+.fc-day-today {
+  background: transparent !important;
+  background-color: transparent !important;
+}
+
+/* Ensure all day column frames are transparent */
+.bases-calendar-wrapper .fc .fc-timegrid-col-frame,
+.bases-calendar-wrapper
+  .fc
+  .fc-timegrid-col.fc-day-today
+  .fc-timegrid-col-frame,
+.fc .fc-timegrid-col-frame,
+.fc .fc-timegrid-col.fc-day-today .fc-timegrid-col-frame {
+  background: transparent !important;
+  background-color: transparent !important;
+}
+
+/* Target the actual background layer that might be causing the black artifact */
+.bases-calendar-wrapper .fc .fc-day-today .fc-daygrid-day-frame,
+.bases-calendar-wrapper .fc .fc-day-today .fc-daygrid-day-bg,
+.fc .fc-day-today .fc-daygrid-day-frame,
+.fc .fc-day-today .fc-daygrid-day-bg {
+  background: transparent !important;
+  background-color: transparent !important;
+}
+
+/* Today highlight */
+.bases-calendar-wrapper .fc .fc-day-today .fc-daygrid-day-frame,
+.fc .fc-day-today .fc-daygrid-day-frame {
+  box-shadow: inset 0 0 0 1px var(--interactive-accent);
+  border-radius: 6px;
+}
+
+.bases-calendar-wrapper .fc .fc-timegrid-col.fc-day-today,
+.fc .fc-timegrid-col.fc-day-today {
+  box-shadow: inset 1px 0 0 rgba(255, 217, 0, 0.6),
+    inset -1px 0 0 rgba(255, 217, 0, 0.6);
+}
+
+.bases-calendar-wrapper .fc .fc-col-header-cell.fc-day-today,
+.fc .fc-col-header-cell.fc-day-today {
+  box-shadow: inset 0 -2px 0 rgba(255, 217, 0, 0.7);
+}
+
+/* Today highlight background layer */
+/* Today highlight overlay */
+.bases-calendar-wrapper .fc .fc-timegrid-col.fc-day-today .fc-timegrid-col-frame,
+.fc .fc-timegrid-col.fc-day-today .fc-timegrid-col-frame,
+.bases-calendar-wrapper .fc .fc-daygrid-day.fc-day-today .fc-daygrid-day-frame,
+.fc .fc-daygrid-day.fc-day-today .fc-daygrid-day-frame {
+  position: relative;
+  z-index: 2;
+}
+
+.bases-calendar-wrapper .fc .fc-timegrid-col.fc-day-today .fc-timegrid-col-frame::before,
+.fc .fc-timegrid-col.fc-day-today .fc-timegrid-col-frame::before,
+.bases-calendar-wrapper .fc .fc-daygrid-day.fc-day-today .fc-daygrid-day-frame::before,
+.fc .fc-daygrid-day.fc-day-today .fc-daygrid-day-frame::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: rgba(255, 217, 0, 0.28);
+  z-index: 2;
+  pointer-events: none;
+}
+
+/* Keep events above the highlight overlay */
+.bases-calendar-wrapper .fc .fc-timegrid-event,
+.bases-calendar-wrapper .fc .fc-daygrid-event,
+.bases-calendar-wrapper .fc .fc-event {
+  position: relative;
+  z-index: 4;
+}

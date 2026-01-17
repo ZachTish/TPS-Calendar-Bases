@@ -1,8 +1,6 @@
-import { DateValue } from "obsidian";
-
 const MIN_SLOT_ZOOM = 0.1;
 const MAX_SLOT_ZOOM = 0.5;
-const BASE_SLOT_HEIGHT = 72;
+const BASE_SLOT_HEIGHT = 90;
 export const MAX_CONDENSE_LEVEL = 220;
 
 export const DEFAULT_CONDENSE_LEVEL = 80;
@@ -17,6 +15,7 @@ export const DEFAULT_PRIORITY_COLOR_MAP: Record<string, string> = {
 export const DEFAULT_STATUS_STYLE_MAP: Record<string, string> = {
   open: "normal",
   complete: "strikethrough",
+  completed: "strikethrough",
   "wont-do": "strikethrough",
   working: "bold",
   blocked: "italic",
@@ -71,7 +70,8 @@ export function formatDateTimeForFrontmatter(date: Date): string {
   const day = String(date.getDate()).padStart(2, "0");
   const hours = String(date.getHours()).padStart(2, "0");
   const minutes = String(date.getMinutes()).padStart(2, "0");
-  return `${year}-${month}-${day} ${hours}:${minutes}`;
+  const seconds = String(date.getSeconds()).padStart(2, "0");
+  return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
 }
 
 export function formatTimeRange(start?: Date | null, end?: Date | null): string {
@@ -91,6 +91,8 @@ export function formatTimeRange(start?: Date | null, end?: Date | null): string 
 export function calculateSlotZoom(condenseLevel: number): number {
   const safeLevel = Math.max(0, Math.min(MAX_CONDENSE_LEVEL, condenseLevel));
   const range = MAX_SLOT_ZOOM - MIN_SLOT_ZOOM;
+  // Higher condense level = more condensed = smaller zoom multiplier
+  // condenseLevel 0 -> 0.5x (larger slots), condenseLevel 220 -> 0.1x (smaller slots)
   return MAX_SLOT_ZOOM - (safeLevel / MAX_CONDENSE_LEVEL) * range;
 }
 
