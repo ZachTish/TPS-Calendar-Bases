@@ -6,7 +6,7 @@
     "type": "module",
     "scripts": {
         "dev": "node esbuild.config.mjs",
-        "build": "node esbuild.config.mjs production && node scripts/copy-files.js",
+        "build": "tsc -noEmit -skipLibCheck && node esbuild.config.mjs production",
         "bundle-to-weekly": "node esbuild.config.mjs production && node scripts/copy-to-weekly.js",
         "version": "node version-bump.mjs && git add manifest.json versions.json"
     },
@@ -35,7 +35,9 @@
         "@fullcalendar/interaction": "^6.1.19",
         "@fullcalendar/react": "^6.1.19",
         "@fullcalendar/timegrid": "^6.1.19",
+        "ical.js": "^2.2.1",
         "react": "^19.2.0",
-        "react-dom": "^19.2.0"
+        "react-dom": "^19.2.0",
+        "rrule": "^2.8.1"
     }
 }
