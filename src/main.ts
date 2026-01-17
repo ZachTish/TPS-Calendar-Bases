@@ -10,12 +10,12 @@ import { AutoCreateService } from "./services/auto-create-service";
 
 const PRIORITY_KEYS = ["low", "normal", "medium", "high"];
 const STATUS_KEYS = ["open", "complete", "wont-do", "working", "blocked"];
-const TEXT_STYLE_OPTIONS: Record<string, string> = {
-  normal: "Normal",
-  bold: "Bold",
-  italic: "Italic",
-  strikethrough: "Strikethrough",
-};
+const TEXT_STYLE_PRESETS: Array<{ value: string; label: string }> = [
+  { value: "bold", label: "Bold" },
+  { value: "italic", label: "Italic" },
+  { value: "strikethrough", label: "Strikethrough" },
+  { value: "line-through", label: "Line-through" },
+];
 
 type CalendarStyleMatch = "all" | "any";
 type CalendarField = "status" | "priority";
@@ -65,6 +65,14 @@ interface CalendarStyleRule {
   textStyle?: string;
 }
 
+interface ExternalCalendarConfig {
+  id: string;
+  url: string;
+  color?: string;
+  tag?: string;
+  enabled?: boolean;
+}
+
 const OPERATOR_LABELS: Record<CalendarOperator, string> = {
   is: "is",
   "!is": "is not",
@@ -85,11 +93,26 @@ const MATCH_OPTIONS: Array<{ value: CalendarStyleMatch; label: string }> = [
 
 const DEFAULT_MATCH: CalendarStyleMatch = "all";
 
+const createRuleId = () =>
+  `${Date.now()}-${Math.random().toString(16).slice(2, 6)}`;
+
+const createCalendarId = () =>
+  `calendar-${Date.now()}-${Math.random().toString(16).slice(2, 6)}`;
+
 const createDefaultCondition = (): CalendarStyleCondition => ({
   field: "status",
   operator: "is",
   value: "",
 });
+
+const parseTextStyleTokens = (value?: string): string[] =>
+  (value || "")
+    .split(/[,|]/)
+    .map((token) => token.trim().toLowerCase())
+    .filter(Boolean);
+
+const buildTextStyleValue = (tokens: string[]): string =>
+  tokens.filter(Boolean).join(", ");
 
 const cloneRule = (rule: CalendarStyleRule): CalendarStyleRule => ({
   ...rule,
@@ -119,6 +142,66 @@ const normalizeStoredRule = (rule: any): CalendarStyleRule => ({
   color: rule?.color || "",
   textStyle: rule?.textStyle || "",
 });
+
+const normalizeExternalCalendar = (
+  calendar: any,
+  fallback: { color?: string; tag?: string } = {},
+): ExternalCalendarConfig => {
+  const url = typeof calendar?.url === "string" ? calendar.url.trim() : "";
+  return {
+    id:
+      typeof calendar?.id === "string"
+        ? calendar.id
+        : `calendar-${Math.random().toString(36).slice(2, 8)}`,
+    url,
+    color:
+      typeof calendar?.color === "string"
+        ? calendar.color.trim()
+        : fallback.color ?? "",
+    tag:
+      typeof calendar?.tag === "string" ? calendar.tag.trim() : fallback.tag ?? "",
+    enabled: calendar?.enabled !== false,
+  };
+};
+
+const parseExternalCalendarUrls = (raw: string): string[] =>
+  raw
+    .split(/[\n,]+/)
+    .map((entry) => entry.trim())
+    .filter(Boolean);
+
+const buildExternalCalendarsFromLegacy = (stored: any = {}): ExternalCalendarConfig[] => {
+  const urls = parseExternalCalendarUrls(stored?.externalCalendarUrls ?? "");
+  const colors = stored?.calendarColors ?? {};
+  const tags = stored?.calendarTags ?? {};
+  return urls.map((url) =>
+    normalizeExternalCalendar(
+      {
+        url,
+        color: colors[url],
+        tag: tags[url],
+        enabled: true,
+      },
+      { color: colors[url], tag: tags[url] },
+    ),
+  );
+};
+
+const syncLegacyCalendarFields = (settings: CalendarPluginSettings) => {
+  const calendars = settings.externalCalendars ?? [];
+  const urls = calendars.map((calendar) => calendar.url).filter(Boolean);
+  settings.externalCalendarUrls = urls.join("\n");
+  settings.calendarColors = Object.fromEntries(
+    calendars
+      .filter((calendar) => calendar.url)
+      .map((calendar) => [calendar.url, calendar.color || ""]),
+  );
+  settings.calendarTags = Object.fromEntries(
+    calendars
+      .filter((calendar) => calendar.url)
+      .map((calendar) => [calendar.url, calendar.tag || ""]),
+  );
+};
 
 const buildLegacyColorRules = (stored: any = {}): CalendarStyleRule[] => {
   const storedPriorityColors = stored?.priorityColors ?? stored?.priorityColorMap ?? {};
@@ -241,6 +324,7 @@ interface CalendarPluginSettings {
   priorityValues: string[];
   statusValues: string[];
   defaultCondenseLevel: number;
+  externalCalendars: ExternalCalendarConfig[];
   externalCalendarUrls: string;
   externalCalendarFilter: string;
   calendarColors: Record<string, string>;
@@ -268,6 +352,7 @@ settings: CalendarPluginSettings = {
     priorityValues: PRIORITY_KEYS,
     statusValues: STATUS_KEYS,
     defaultCondenseLevel: DEFAULT_CONDENSE_LEVEL,
+    externalCalendars: [],
     externalCalendarUrls: "",
     externalCalendarFilter: "",
     calendarColors: {},
@@ -320,6 +405,28 @@ settings: CalendarPluginSettings = {
     const calendarStyleRules = hasStoredRules
       ? storedRules
       : [...buildLegacyColorRules(stored), ...buildLegacyTextRules(stored)];
+    const legacyColors = stored?.calendarColors ?? {};
+    const legacyTags = stored?.calendarTags ?? {};
+    const storedCalendars: ExternalCalendarConfig[] = Array.isArray(
+      stored?.externalCalendars,
+    )
+      ? stored.externalCalendars.map((calendar: any) => {
+          const normalized = normalizeExternalCalendar(calendar, {
+            color: legacyColors[calendar?.url ?? ""],
+            tag: legacyTags[calendar?.url ?? ""],
+          });
+          if (!normalized.color && legacyColors[normalized.url]) {
+            normalized.color = legacyColors[normalized.url];
+          }
+          if (!normalized.tag && legacyTags[normalized.url]) {
+            normalized.tag = legacyTags[normalized.url];
+          }
+          return normalized;
+        })
+      : [];
+    const externalCalendars = storedCalendars.length
+      ? storedCalendars
+      : buildExternalCalendarsFromLegacy(stored);
 
 this.settings = {
       sidebarBasePath: stored?.sidebarBasePath ?? "",
@@ -330,6 +437,7 @@ this.settings = {
       statusValues: stored?.statusValues ?? STATUS_KEYS,
       defaultCondenseLevel:
         stored?.defaultCondenseLevel ?? DEFAULT_CONDENSE_LEVEL,
+      externalCalendars,
       externalCalendarUrls: stored?.externalCalendarUrls ?? "",
       externalCalendarFilter: stored?.externalCalendarFilter ?? "",
       calendarColors: stored?.calendarColors ?? {},
@@ -382,11 +490,15 @@ this.settings = {
   }
 
   getExternalCalendarUrls(): string[] {
+    const calendars = this.settings.externalCalendars ?? [];
+    const enabledCalendars = calendars.filter(
+      (calendar) => calendar.url && calendar.enabled !== false,
+    );
+    if (enabledCalendars.length) {
+      return enabledCalendars.map((calendar) => calendar.url);
+    }
     const raw = this.settings.externalCalendarUrls ?? "";
-    return raw
-      .split(/[\n,]+/)
-      .map((entry) => entry.trim())
-      .filter(Boolean);
+    return parseExternalCalendarUrls(raw);
   }
 
   getExternalCalendarFilter(): string {
@@ -394,11 +506,15 @@ this.settings = {
   }
 
   getCalendarColor(url: string): string {
-    return this.settings.calendarColors?.[url] ?? "#3b82f6";
+    const calendars = this.settings.externalCalendars ?? [];
+    const match = calendars.find((calendar) => calendar.url === url);
+    return match?.color || this.settings.calendarColors?.[url] || "#3b82f6";
   }
 
   getCalendarTag(url: string): string {
-    return this.settings.calendarTags?.[url] ?? "";
+    const calendars = this.settings.externalCalendars ?? [];
+    const match = calendars.find((calendar) => calendar.url === url);
+    return match?.tag || this.settings.calendarTags?.[url] || "";
   }
 
   getHiddenEvents(): string[] {
@@ -494,7 +610,7 @@ class CalendarPluginSettingsTab extends PluginSettingTab {
           .onClick(async () => {
             const rules = this.plugin.settings.calendarStyleRules;
             rules.push({
-              id: `${Date.now()}-${Math.random().toString(16).slice(2, 6)}`,
+              id: createRuleId(),
               label: `Rule ${rules.length + 1}`,
               active: true,
               match: DEFAULT_MATCH,
@@ -507,17 +623,77 @@ class CalendarPluginSettingsTab extends PluginSettingTab {
           }),
       );
 
-    containerEl.createEl("h3", { text: "External Calendars" });
+    containerEl.createEl("h3", { text: "External calendars" });
+    const calendarsContainer = containerEl.createDiv();
+    this.renderExternalCalendars(calendarsContainer);
+
     new Setting(containerEl)
-      .setName("iCal URLs")
-      .setDesc("Comma or newline separated .ics URLs")
-      .addTextArea((text) =>
+      .setName("Add calendar")
+      .setDesc("Add an external iCal feed and assign its color + auto-create tag.")
+      .addButton((btn) =>
+        btn
+          .setIcon("plus")
+          .setButtonText("Add calendar")
+          .onClick(async () => {
+            if (!this.plugin.settings.externalCalendars) {
+              this.plugin.settings.externalCalendars = [];
+            }
+            this.plugin.settings.externalCalendars.push({
+              id: createCalendarId(),
+              url: "",
+              color: "#3b82f6",
+              tag: "",
+              enabled: true,
+            });
+            syncLegacyCalendarFields(this.plugin.settings);
+            await this.plugin.saveSettings();
+            this.renderExternalCalendars(calendarsContainer);
+          }),
+      );
+
+    let bulkInput = "";
+    let bulkInputComponent: { setValue: (value: string) => void } | null = null;
+    new Setting(containerEl)
+      .setName("Quick add")
+      .setDesc("Paste one or more iCal URLs (comma or newline separated).")
+      .addTextArea((text) => {
+        bulkInputComponent = text as unknown as {
+          setValue: (value: string) => void;
+        };
         text
           .setPlaceholder("https://example.com/calendar.ics")
-          .setValue(this.plugin.settings.externalCalendarUrls || "")
-          .onChange(async (value) => {
-            this.plugin.settings.externalCalendarUrls = value;
+          .onChange((value) => {
+            bulkInput = value;
+          });
+      })
+      .addButton((btn) =>
+        btn
+          .setButtonText("Add URLs")
+          .setCta()
+          .onClick(async () => {
+            const urls = parseExternalCalendarUrls(bulkInput);
+            if (!urls.length) return;
+            if (!this.plugin.settings.externalCalendars) {
+              this.plugin.settings.externalCalendars = [];
+            }
+            const existing = new Set(
+              this.plugin.settings.externalCalendars.map((calendar) => calendar.url),
+            );
+            urls.forEach((url) => {
+              if (existing.has(url)) return;
+              this.plugin.settings.externalCalendars.push({
+                id: createCalendarId(),
+                url,
+                color: "#3b82f6",
+                tag: "",
+                enabled: true,
+              });
+            });
+            syncLegacyCalendarFields(this.plugin.settings);
             await this.plugin.saveSettings();
+            bulkInput = "";
+            bulkInputComponent?.setValue("");
+            this.renderExternalCalendars(calendarsContainer);
           }),
       );
 
@@ -533,34 +709,6 @@ class CalendarPluginSettingsTab extends PluginSettingTab {
             await this.plugin.saveSettings();
           }),
       );
-
-    const urlList = this.plugin.getExternalCalendarUrls();
-    if (urlList.length) {
-      containerEl.createEl("h4", { text: "Calendar Colors & Tags" });
-      urlList.forEach((url, index) => {
-        const desc = url.length > 50 ? `${url.slice(0, 47)}...` : url;
-        const setting = new Setting(containerEl)
-          .setName(`Calendar ${index + 1}`)
-          .setDesc(desc)
-          .addColorPicker((picker) =>
-            picker
-              .setValue(this.plugin.settings.calendarColors[url] || "#3b82f6")
-              .onChange(async (value) => {
-                this.plugin.settings.calendarColors[url] = value;
-                await this.plugin.saveSettings();
-              }),
-          );
-        setting.addText((text) =>
-          text
-            .setPlaceholder("Tag (optional)")
-            .setValue(this.plugin.settings.calendarTags[url] || "")
-            .onChange(async (value) => {
-              this.plugin.settings.calendarTags[url] = value.trim();
-              await this.plugin.saveSettings();
-            }),
-        );
-      });
-    }
 
     const autoSection = containerEl.createEl("div");
     autoSection.createEl("h3", { text: "Auto-create meeting notes" });
@@ -657,6 +805,132 @@ class CalendarPluginSettingsTab extends PluginSettingTab {
       );
   }
 
+  renderExternalCalendars(container: HTMLElement) {
+    container.empty();
+    if (!this.plugin.settings.externalCalendars) {
+      this.plugin.settings.externalCalendars = [];
+    }
+    const calendars = this.plugin.settings.externalCalendars;
+    const refresh = async () => {
+      syncLegacyCalendarFields(this.plugin.settings);
+      await this.plugin.saveSettings();
+      this.renderExternalCalendars(container);
+    };
+
+    if (!calendars.length) {
+      const empty = container.createEl("p", {
+        text: "No external calendars added yet.",
+      });
+      empty.style.marginBottom = "12px";
+      empty.style.color = "var(--text-muted)";
+      return;
+    }
+
+    calendars.forEach((calendar, index) => {
+      const card = container.createDiv();
+      card.style.border = "1px solid var(--background-modifier-border)";
+      card.style.borderRadius = "8px";
+      card.style.padding = "12px";
+      card.style.marginBottom = "12px";
+      card.style.display = "flex";
+      card.style.flexDirection = "column";
+      card.style.gap = "8px";
+
+      const header = card.createDiv();
+      header.style.display = "flex";
+      header.style.alignItems = "center";
+      header.style.gap = "8px";
+
+      const title = header.createEl("strong", {
+        text: calendar.url ? `Calendar ${index + 1}` : "New calendar",
+      });
+      title.style.flex = "1";
+
+      const move = (from: number, to: number) => {
+        [calendars[from], calendars[to]] = [calendars[to], calendars[from]];
+      };
+
+      const controls = header.createDiv();
+      controls.style.display = "flex";
+      controls.style.gap = "4px";
+
+      const upBtn = controls.createEl("button", { text: "↑" });
+      upBtn.className = "mod-cta";
+      upBtn.disabled = index === 0;
+      upBtn.addEventListener("click", async () => {
+        if (index === 0) return;
+        move(index, index - 1);
+        await refresh();
+      });
+
+      const downBtn = controls.createEl("button", { text: "↓" });
+      downBtn.className = "mod-cta";
+      downBtn.disabled = index === calendars.length - 1;
+      downBtn.addEventListener("click", async () => {
+        if (index >= calendars.length - 1) return;
+        move(index, index + 1);
+        await refresh();
+      });
+
+      const deleteBtn = controls.createEl("button", { text: "Delete" });
+      deleteBtn.className = "mod-warning";
+      deleteBtn.addEventListener("click", async () => {
+        calendars.splice(index, 1);
+        await refresh();
+      });
+
+      new Setting(card)
+        .setName("Enabled")
+        .setDesc("Toggle this calendar on/off without removing it.")
+        .addToggle((toggle) =>
+          toggle
+            .setValue(calendar.enabled !== false)
+            .onChange(async (value) => {
+              calendar.enabled = value;
+              await refresh();
+            }),
+        );
+
+      new Setting(card)
+        .setName("iCal URL")
+        .setDesc("Paste the full .ics URL for this calendar.")
+        .addText((text) =>
+          text
+            .setPlaceholder("https://example.com/calendar.ics")
+            .setValue(calendar.url || "")
+            .onChange(async (value) => {
+              calendar.url = value.trim();
+              await refresh();
+            }),
+        );
+
+      new Setting(card)
+        .setName("Color")
+        .setDesc("Calendar color for external events.")
+        .addColorPicker((picker) =>
+          picker
+            .setValue(calendar.color || "#3b82f6")
+            .onChange(async (value) => {
+              calendar.color = value;
+              await refresh();
+            }),
+        );
+
+      new Setting(card)
+        .setName("Auto-create tag")
+        .setDesc("Tag to apply when creating meeting notes from this calendar.")
+        .addText((text) =>
+          text
+            .setPlaceholder("tag-name (optional)")
+            .setValue(calendar.tag || "")
+            .onChange(async (value) => {
+              calendar.tag = value.trim();
+              await refresh();
+            }),
+        );
+    });
+  }
+
   renderCalendarStyleRules(container: HTMLElement) {
     container.empty();
     if (!this.plugin.settings.calendarStyleRules) {
@@ -687,6 +961,18 @@ class CalendarPluginSettingsTab extends PluginSettingTab {
       header.style.display = "flex";
       header.style.alignItems = "center";
       header.style.gap = "12px";
+
+      const activeWrap = header.createEl("label");
+      activeWrap.style.display = "flex";
+      activeWrap.style.alignItems = "center";
+      activeWrap.style.gap = "6px";
+      const activeToggle = activeWrap.createEl("input", { type: "checkbox" });
+      activeToggle.checked = rule.active !== false;
+      activeToggle.addEventListener("change", async () => {
+        rule.active = activeToggle.checked;
+        await refresh();
+      });
+      activeWrap.createEl("span", { text: "Active" });
 
       const labelInput = header.createEl("input", {
         type: "text",
@@ -726,6 +1012,18 @@ class CalendarPluginSettingsTab extends PluginSettingTab {
         await refresh();
       });
 
+      const duplicateBtn = controlGroup.createEl("button", { text: "Duplicate" });
+      duplicateBtn.className = "mod-cta";
+      duplicateBtn.addEventListener("click", async () => {
+        const duplicated = cloneRule(rule);
+        duplicated.id = createRuleId();
+        duplicated.label = duplicated.label
+          ? `${duplicated.label} copy`
+          : `Rule ${rules.length + 1}`;
+        rules.splice(index + 1, 0, duplicated);
+        await refresh();
+      });
+
       const deleteBtn = controlGroup.createEl("button", { text: "Delete" });
       deleteBtn.className = "mod-warning";
       deleteBtn.addEventListener("click", async () => {
@@ -745,18 +1043,69 @@ class CalendarPluginSettingsTab extends PluginSettingTab {
             }),
         );
 
-      new Setting(card)
+      const textStyleSetting = new Setting(card)
         .setName("Text style")
-        .setDesc("Line-through, italic, bold, faded, important...")
-        .addText((text) =>
-          text
-            .setValue(rule.textStyle || "")
-            .setPlaceholder("line-through")
-            .onChange(async (value) => {
-              rule.textStyle = value.trim();
-              await refresh();
-            }),
+        .setDesc("Select built-in styles or add custom classes.");
+      {
+        const presetValues = new Set(
+          TEXT_STYLE_PRESETS.map((preset) => preset.value),
         );
+        const tokens = parseTextStyleTokens(rule.textStyle);
+        const selectedPresets = new Set(
+          tokens.filter((token) => presetValues.has(token)),
+        );
+        const customTokens = tokens.filter((token) => !presetValues.has(token));
+
+        const controls = textStyleSetting.controlEl.createDiv();
+        controls.style.display = "flex";
+        controls.style.flexWrap = "wrap";
+        controls.style.gap = "8px";
+        controls.style.alignItems = "center";
+
+        let customInput: HTMLInputElement;
+        const updateStyle = async (nextCustomValue?: string) => {
+          const customValue =
+            nextCustomValue !== undefined
+              ? nextCustomValue
+              : customInput.value;
+          const custom = parseTextStyleTokens(customValue).filter(
+            (token) => !presetValues.has(token),
+          );
+          rule.textStyle = buildTextStyleValue([
+            ...Array.from(selectedPresets),
+            ...custom,
+          ]);
+          await refresh();
+        };
+
+        TEXT_STYLE_PRESETS.forEach((preset) => {
+          const label = controls.createEl("label");
+          label.style.display = "flex";
+          label.style.alignItems = "center";
+          label.style.gap = "4px";
+          const checkbox = label.createEl("input", { type: "checkbox" });
+          checkbox.checked = selectedPresets.has(preset.value);
+          checkbox.addEventListener("change", async () => {
+            if (checkbox.checked) {
+              selectedPresets.add(preset.value);
+            } else {
+              selectedPresets.delete(preset.value);
+            }
+            await updateStyle();
+          });
+          label.createEl("span", { text: preset.label });
+        });
+
+        customInput = controls.createEl("input");
+        customInput.type = "text";
+        customInput.placeholder = "custom-class, another";
+        customInput.value = customTokens.join(", ");
+        customInput.style.minWidth = "180px";
+
+        customInput.addEventListener("change", async () => {
+          await updateStyle(customInput.value);
+        });
+      }
 
       new Setting(card)
         .setName("Match logic")
