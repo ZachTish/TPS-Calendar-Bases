@@ -1,7 +1,7 @@
 {
 	"id": "calendar-weekly-bases",
 	"name": "Weekly Calendar Bases",
-	"version": "0.1.0",
+	"version": "v1.0.0",
 	"minAppVersion": "1.10.0",
 	"description": "Adds a weekly time-grid calendar layout to Bases powered by FullCalendar.",
 	"author": "Codex",
